@@ -1,0 +1,67 @@
+float4x4 v 	 	 : View;
+float4x4 p       : Projection;
+float4x4 w     	 : World;
+float4x4 wit     : WorldInverseTranspose;
+
+texture _MainTexture;
+uniform sampler2D _mainText = sampler_state {
+    Texture = (_MainTexture);
+    MinFilter = Linear;
+    MagFilter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+uniform float twist;
+uniform float2 shift;
+
+struct v_in
+{
+	float4 position : POSITION;
+	float2 texCoord : TEXCOORD;
+};
+
+struct v_out
+{
+	float2 texCoord : TEXCOORD;
+	float4 position : POSITION;
+};
+
+struct f_in
+{
+	float2 texCoord : TEXCOORD;
+};
+
+v_out Vertex(v_in _in)
+{
+	v_out OUT;	
+		
+	float4 position = _in.position;
+	float angle = twist * length(position.xz + shift);
+	float cosL, sinL;
+	sincos(angle, sinL, cosL);
+	position.x = cosL * position.x + -sinL * position.z;
+	position.z = sinL * position.x + cosL * position.z;
+	position.y = 0;
+	position.w = 0.8f;	
+	
+ 	float4 worldPosition = mul(w, position);
+    float4 viewPosition = mul(v, worldPosition);		
+    OUT.position = mul(p, viewPosition);
+	OUT.texCoord = _in.texCoord;
+
+	return OUT;
+}
+
+float4 Fragment(f_in _in) : COLOR 
+{		
+	return tex2D(_mainText,_in.texCoord);
+}
+
+technique technique0 {	
+	pass p0 {
+		CullFaceEnable = false;
+		VertexProgram = compile vp40  Vertex();
+		FragmentProgram = compile fp40 Fragment();	
+	}
+}
