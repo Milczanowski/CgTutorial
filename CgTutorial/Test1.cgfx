@@ -2,6 +2,7 @@ float4x4 v 	 	 : View;
 float4x4 p       : Projection;
 float4x4 w     	 : World;
 float4x4 wit     : WorldInverseTranspose;
+float3 wslp	     : DIFFUSE;
 
 texture _MainTexture;
 uniform sampler2D _mainText = sampler_state {
@@ -12,41 +13,61 @@ uniform sampler2D _mainText = sampler_state {
     AddressV = Clamp;
 };
 
-uniform float twist;
-uniform float2 shift;
+uniform float3 globalAmbient : COLOR;
+uniform float3 lightColor : COLOR;
+uniform float3 lightPosition : DIRECTION;
+uniform float3 Ke : COLOR;
+uniform float3 Ka : COLOR;
+uniform float3 Kd : COLOR;
+uniform float3 Ks : COLOR;
+uniform float shininess;
+
 
 struct v_in
 {
 	float4 position : POSITION;
 	float2 texCoord : TEXCOORD;
+	float3 normal 	: NORMAL;
 };
 
 struct v_out
 {
 	float2 texCoord : TEXCOORD;
 	float4 position : POSITION;
+	float4 color: COLOR;
 };
 
 struct f_in
 {
 	float2 texCoord : TEXCOORD;
+	float4 color: COLOR;
 };
 
 v_out Vertex(v_in _in)
 {
-	v_out OUT;	
-		
-	float4 position = _in.position;
-	float angle = twist * length(position.xz + shift);
-	float cosL, sinL;
-	sincos(angle, sinL, cosL);
-	position.x = cosL * position.x + -sinL * position.z;
-	position.z = sinL * position.x + cosL * position.z;
-	position.y = 0;
-	position.w = 0.8f;	
+	v_out OUT;		
+
+	float3 ambient = Ka * globalAmbient;
 	
- 	float4 worldPosition = mul(w, position);
-    float4 viewPosition = mul(v, worldPosition);		
+	float3 L =normalize(lightPosition -_in.position.xyz);
+	float diffuseLight = max(dot(_in.normal, L),0);
+	float3 diffuse = Kd * lightColor * diffuseLight;
+	
+	float3 eyePosition = mul(v, _in.position).xyz;
+	float3 V = normalize(eyePosition - _in.position.xyz);
+	float3 H = normalize(L + V);
+	
+	float specularLight = 0;
+	
+	if(diffuseLight > 0)
+		specularLight = pow(max(dot(_in.normal, H),0), shininess);
+		
+	float3 specular = Ks* lightColor * specularLight;
+	
+	
+ 	float4 worldPosition = mul(w, _in.position);
+    float4 viewPosition = mul(v, worldPosition);	
+	OUT.color = float4(Ke +ambient +diffuse + specular, 1);
     OUT.position = mul(p, viewPosition);
 	OUT.texCoord = _in.texCoord;
 
@@ -55,12 +76,13 @@ v_out Vertex(v_in _in)
 
 float4 Fragment(f_in _in) : COLOR 
 {		
-	return tex2D(_mainText,_in.texCoord);
+	return lerp(tex2D(_mainText,_in.texCoord), _in.color,0.5f);
 }
 
 technique technique0 {	
 	pass p0 {
 		CullFaceEnable = false;
+		ZEnable = true;
 		VertexProgram = compile vp40  Vertex();
 		FragmentProgram = compile fp40 Fragment();	
 	}
